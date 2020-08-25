@@ -5,8 +5,8 @@ import haxe.ui.backend.html5.HtmlUtils;
 import haxe.ui.backend.html5.StyleHelper;
 import haxe.ui.backend.html5.UserAgent;
 import haxe.ui.backend.html5.native.NativeElement;
+import haxe.ui.backend.html5.util.StyleSheetHelper;
 import haxe.ui.components.Image;
-import haxe.ui.components.Label;
 import haxe.ui.components.TextArea;
 import haxe.ui.components.TextField;
 import haxe.ui.components.VerticalProgress;
@@ -30,6 +30,7 @@ import haxe.ui.styles.Style;
 import js.Browser;
 import js.html.CSSStyleDeclaration;
 import js.html.CSSStyleSheet;
+import js.html.CanvasElement;
 import js.html.Element;
 import js.html.MutationObserver;
 import js.html.MutationRecord;
@@ -56,17 +57,16 @@ class ComponentImpl extends ComponentBase {
         }
 
         if (Browser.document.styleSheets.length == 0) {
-            var head = Browser.document.head;
             var style = Browser.document.createElement("style");
             style.appendChild(Browser.document.createTextNode(""));
             Browser.document.head.appendChild(style);
         }
         
-        var sheet:CSSStyleSheet = cast(Browser.document.styleSheets[0], CSSStyleSheet);
         if (_stylesAdded == false) {
             _stylesAdded = true;
             
-            sheet.insertRule("#haxeui-container .haxeui-component {
+            var sheet:CSSStyleSheet = StyleSheetHelper.getValidStyleSheet();
+            sheet.insertRule("#haxeui-container .haxeui-component, .haxeui-component:focus {
                 position: absolute;
                 box-sizing: border-box;
                 -webkit-touch-callout: none;
@@ -75,6 +75,9 @@ class ComponentImpl extends ComponentBase {
                 -moz-user-select: none;
                 -ms-user-select: none;
                 user-select: none;
+                -webkit-tap-highlight-color: transparent;
+                webkit-user-select;
+                outline: none !important;
             }", sheet.cssRules.length);
         }
     }
@@ -95,6 +98,13 @@ class ComponentImpl extends ComponentBase {
         }
     }
 
+    private override function get_isNativeScroller():Bool {
+        if (Std.is(this, ScrollView) && cast(this, Component).native == true) {
+            return true;
+        }
+        return false;
+    }
+    
     private function recursiveReady() {
         elementToComponent.remove(element);
         var component:Component = cast(this, Component);
@@ -234,6 +244,8 @@ class ComponentImpl extends ComponentBase {
 
                 width = th;
                 height = tw;
+                
+                element.style.marginLeft = "-" + width + "px";
             }
         }
 
@@ -261,11 +273,20 @@ class ComponentImpl extends ComponentBase {
         if (cast(this, Component).id != null) {
             element.id = cast(this, Component).id;
         }
-        if (Std.is(this, Label)) { // TODO: is this hacky?? 
-            element.style.setProperty("pointer-events", "none");
-        }
     }
 
+    private override function handleFrameworkProperty(id:String, value:Any) {
+        switch (id) {
+            case "allowMouseInteraction":
+                if (value == true && element.style.getPropertyValue("pointer-events") != null) {
+                    element.style.removeProperty("pointer-events");
+                } else if (element.style.getPropertyValue("pointer-events") != "none") {
+                    element.style.setProperty("pointer-events", "none");
+                    setCursor(null);
+                }
+        }
+    }
+    
     private override function handleClipRect(value:Rectangle) {
         var c:Component = cast(this, Component);
         var parent:Component = c.parentComponent;
@@ -275,11 +296,11 @@ class ComponentImpl extends ComponentBase {
                 if (element.style.position != "fixed") {
                     element.style.position = "fixed";
                 }
-                element.style.left = '${HtmlUtils.px(c.screenLeft - value.left)}';
-                element.style.top = '${HtmlUtils.px(c.screenTop - value.top)}';
+                element.style.left = '${HtmlUtils.px(Std.int(c.screenLeft - value.left))}';
+                element.style.top = '${HtmlUtils.px(Std.int(c.screenTop - value.top))}';
             } else {
-                element.style.left = '${HtmlUtils.px(c.left - value.left)}';
-                element.style.top = '${HtmlUtils.px(c.top - value.top)}';
+                element.style.left = '${HtmlUtils.px(Std.int(c.left - value.left))}';
+                element.style.top = '${HtmlUtils.px(Std.int(c.top - value.top))}';
             }
         } else {
             element.style.removeProperty("clip");
@@ -365,7 +386,7 @@ class ComponentImpl extends ComponentBase {
             if (Std.is(style.filter[0], DropShadow)) {
                 var dropShadow:DropShadow = cast style.filter[0];
                 if (dropShadow.inner == false) {
-                    element.style.boxShadow = '${dropShadow.distance}px ${dropShadow.distance}px ${dropShadow.blurX - 1}px ${dropShadow.blurY - 1}px ${HtmlUtils.rgba(dropShadow.color, dropShadow.alpha)}';
+                    element.style.boxShadow = '${dropShadow.distance}px ${dropShadow.distance + 2}px ${dropShadow.blurX - 1}px ${dropShadow.blurY - 1}px ${HtmlUtils.rgba(dropShadow.color, dropShadow.alpha)}';
                 } else {
                     element.style.boxShadow = 'inset ${dropShadow.distance}px ${dropShadow.distance}px ${dropShadow.blurX}px 0px ${HtmlUtils.rgba(dropShadow.color, dropShadow.alpha)}';
                 }
@@ -388,6 +409,15 @@ class ComponentImpl extends ComponentBase {
             element.style.removeProperty("filter");
         }
 
+        if (style.backdropFilter != null) {
+            if (Std.is(style.backdropFilter[0], Blur)) {
+                var blur:Blur = cast style.backdropFilter[0];
+                element.style.setProperty("backdrop-filter", 'blur(${blur.amount}px)');
+            }
+        } else {
+            element.style.removeProperty("backdrop-filter");
+        }
+        
         if (style.opacity != null) {
             element.style.opacity = '${style.opacity}';
         }
@@ -456,13 +486,46 @@ class ComponentImpl extends ComponentBase {
         return __props.exists(name);
     }
 
+    private var _canvas:CanvasElement = null;
+    private function getCanvas(width:Float, height:Float) {
+        if (_canvas == null) {
+            _canvas = Browser.document.createCanvasElement();
+            _canvas.style.setProperty("-webkit-backface-visibility", "hidden");
+            _canvas.style.setProperty("-moz-backface-visibility", "hidden");
+            _canvas.style.setProperty("-ms-backface-visibility", "hidden");
+            _canvas.style.position = "absolute";
+            _canvas.style.pointerEvents = "none";
+            _canvas.width = cast width;
+            _canvas.height = cast height;
+            element.insertBefore(_canvas, element.firstChild);
+        }
+        if (width != _canvas.width) {
+            _canvas.width = cast width;
+        }
+        if (height != _canvas.height) {
+            _canvas.height = cast height;
+        }
+        return _canvas;
+    }
+    
+    private function hasCanvas() {
+        return (_canvas != null);
+    }
+    
+    private function removeCanvas() {
+        if (_canvas != null && element.contains(_canvas)) {
+            element.removeChild(_canvas);
+            _canvas = null;
+        }
+    }
+    
     //***********************************************************************************************************
     // Events
     //***********************************************************************************************************
     private override function mapEvent(type:String, listener:UIEvent->Void) {
         switch (type) {
             case MouseEvent.MOUSE_MOVE | MouseEvent.MOUSE_OVER | MouseEvent.MOUSE_OUT |
-                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK:
+                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK:
                 if (_eventMap.exists(type) == false) {
                     if (EventMapper.MOUSE_TO_TOUCH.get(type) != null) {
                         element.addEventListener(EventMapper.MOUSE_TO_TOUCH.get(type), __onMouseEvent);
@@ -506,7 +569,7 @@ class ComponentImpl extends ComponentBase {
     private override function unmapEvent(type:String, listener:UIEvent->Void) {
         switch (type) {
             case MouseEvent.MOUSE_MOVE | MouseEvent.MOUSE_OVER | MouseEvent.MOUSE_OUT |
-                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK:
+                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK:
                 _eventMap.remove(type);
                 element.removeEventListener(EventMapper.HAXEUI_TO_DOM.get(type), __onMouseEvent);
                 if (EventMapper.MOUSE_TO_TOUCH.get(type) != null) {

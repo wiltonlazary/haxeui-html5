@@ -2,21 +2,35 @@ package haxe.ui.backend.html5;
 
 import haxe.ui.assets.ImageInfo;
 import haxe.ui.backend.ComponentImpl;
-import haxe.ui.styles.Style;
 import haxe.ui.geom.Rectangle;
 import haxe.ui.geom.Slice9;
-import js.Browser;
+import haxe.ui.styles.Style;
 import js.html.CSSStyleDeclaration;
-import js.html.CanvasElement;
 import js.html.CanvasRenderingContext2D;
 import js.html.Element;
 import js.html.Image;
 
 class StyleHelper {
-    @:access(haxe.ui.core.ComponentImpl)
+    @:access(haxe.ui.backend.ComponentImpl)
     public static function apply(component:ComponentImpl, width:Float, height:Float, style:Style) {
         var element:Element = component.element;
         var css:CSSStyleDeclaration = element.style;
+
+        var slice:Rectangle = null;
+        if (style.backgroundImageSliceTop != null &&
+            style.backgroundImageSliceLeft != null &&
+            style.backgroundImageSliceBottom != null &&
+            style.backgroundImageSliceRight != null) {
+            slice = new Rectangle(style.backgroundImageSliceLeft,
+                                  style.backgroundImageSliceTop,
+                                  style.backgroundImageSliceRight - style.backgroundImageSliceLeft,
+                                  style.backgroundImageSliceBottom - style.backgroundImageSliceTop);
+        }
+
+        if (slice != null) {
+            width = Math.fround(width);
+            height = Math.fround(height);
+        }
 
         css.width = HtmlUtils.px(width);
         css.height = HtmlUtils.px(height);
@@ -80,7 +94,11 @@ class StyleHelper {
             style.borderLeftColor == style.borderBottomColor &&
             style.borderLeftColor == style.borderTopColor) {
 
-            css.borderColor = HtmlUtils.color(style.borderLeftColor);
+            if (style.borderOpacity == null) {
+                css.borderColor = HtmlUtils.color(style.borderLeftColor);
+            } else {
+                css.borderColor = HtmlUtils.rgba(style.borderLeftColor, style.borderOpacity);
+            }
         } else if (style.borderLeftColor == null &&
             style.borderRightColor == null &&
             style.borderBottomColor == null &&
@@ -88,25 +106,41 @@ class StyleHelper {
             css.removeProperty("border-color");
         } else {
             if (style.borderTopColor != null) {
-               css.borderTopColor = HtmlUtils.color(style.borderTopColor);
+                if (style.borderOpacity == null) {
+                    css.borderTopColor = HtmlUtils.color(style.borderTopColor);
+                } else {
+                    css.borderTopColor = HtmlUtils.rgba(style.borderTopColor, style.borderOpacity);
+                }
             } else {
                 css.removeProperty("border-top-color");
             }
 
             if (style.borderLeftColor != null) {
-               css.borderLeftColor = HtmlUtils.color(style.borderLeftColor);
+                if (style.borderOpacity == null) {
+                    css.borderLeftColor = HtmlUtils.color(style.borderLeftColor);
+                } else {
+                    css.borderLeftColor = HtmlUtils.rgba(style.borderLeftColor, style.borderOpacity);
+                }
             } else {
                 css.removeProperty("border-left-color");
             }
 
             if (style.borderBottomColor != null) {
-               css.borderBottomColor = HtmlUtils.color(style.borderBottomColor);
+                if (style.borderOpacity == null) {
+                    css.borderBottomColor = HtmlUtils.color(style.borderBottomColor);
+                } else {
+                    css.borderBottomColor = HtmlUtils.rgba(style.borderBottomColor, style.borderOpacity);
+                }
             } else {
                 css.removeProperty("border-bottom-color");
             }
 
             if (style.borderRightColor != null) {
-               css.borderRightColor = HtmlUtils.color(style.borderRightColor);
+                if (style.borderOpacity == null) {
+                    css.borderRightColor = HtmlUtils.color(style.borderRightColor);
+                } else {
+                    css.borderRightColor = HtmlUtils.rgba(style.borderRightColor, style.borderOpacity);
+                }
             } else {
                 css.removeProperty("border-right-color");
             }
@@ -148,18 +182,42 @@ class StyleHelper {
             css.removeProperty("background-color");
         }
 
-        if (style.borderRadius != null && style.borderRadius > 0) {
+        if (style.borderRadius != null && style.borderRadius > 0
+            && (style.borderRadiusTopLeft == null || style.borderRadiusTopLeft == style.borderRadius)
+            && (style.borderRadiusTopRight == null || style.borderRadiusTopRight == style.borderRadius)
+            && (style.borderRadiusBottomLeft == null || style.borderRadiusBottomLeft == style.borderRadius)
+            && (style.borderRadiusBottomRight == null || style.borderRadiusBottomRight == style.borderRadius)) {
             css.borderRadius = HtmlUtils.px(style.borderRadius);
+        } else if ((style.borderRadiusTopLeft != null && style.borderRadiusTopLeft > 0)
+            || (style.borderRadiusTopRight != null && style.borderRadiusTopRight > 0)
+            || (style.borderRadiusBottomLeft != null && style.borderRadiusBottomLeft > 0)
+            || (style.borderRadiusBottomRight != null && style.borderRadiusBottomRight > 0)) {
+                if (style.borderRadiusTopLeft != null && style.borderRadiusTopLeft > 0) {
+                    css.borderTopLeftRadius = HtmlUtils.px(style.borderRadiusTopLeft);
+                } else {
+                    css.removeProperty("border-top-left-radius");
+                }
+                if (style.borderRadiusTopRight != null && style.borderRadiusTopRight > 0) {
+                    css.borderTopRightRadius = HtmlUtils.px(style.borderRadiusTopRight);
+                } else {
+                    css.removeProperty("border-top-right-radius");
+                }
+                if (style.borderRadiusBottomLeft != null && style.borderRadiusBottomLeft > 0) {
+                    css.borderBottomLeftRadius = HtmlUtils.px(style.borderRadiusBottomLeft);
+                } else {
+                    css.removeProperty("border-bottom-left-radius");
+                }
+                if (style.borderRadiusBottomRight != null && style.borderRadiusBottomRight > 0) {
+                    css.borderBottomRightRadius = HtmlUtils.px(style.borderRadiusBottomRight);
+                } else {
+                    css.removeProperty("border-bottom-right-radius");
+                }
         } else {
             css.removeProperty("border-radius");
         }
 
         // background image
         if (style.backgroundImage != null) {
-            if (component.element.nodeName == "BUTTON") {
-                css.border = "none";
-            }
-
             Toolkit.assets.getImage(style.backgroundImage, function(imageInfo:ImageInfo) {
                 if (imageInfo == null) {
                     return;
@@ -176,17 +234,6 @@ class StyleHelper {
                                                   style.backgroundImageClipBottom - style.backgroundImageClipTop);
                 }
 
-                var slice:Rectangle = null;
-                if (style.backgroundImageSliceTop != null &&
-                    style.backgroundImageSliceLeft != null &&
-                    style.backgroundImageSliceBottom != null &&
-                    style.backgroundImageSliceRight != null) {
-                    slice = new Rectangle(style.backgroundImageSliceLeft,
-                                          style.backgroundImageSliceTop,
-                                          style.backgroundImageSliceRight - style.backgroundImageSliceLeft,
-                                          style.backgroundImageSliceBottom - style.backgroundImageSliceTop);
-                }
-
                 if (slice == null) {
                     if (imageRect.width == imageInfo.width && imageRect.height == imageInfo.height) {
                         background.push('url(${imageInfo.data.src})');
@@ -198,24 +245,22 @@ class StyleHelper {
                             css.backgroundRepeat = "no-repeat";
                             css.backgroundSize = '${HtmlUtils.px(width)} ${HtmlUtils.px(height)}';
                         }
+                        background.reverse();
+                        css.background = background.join(",");
                     } else {
-                        var canvas:CanvasElement = Browser.document.createCanvasElement();
-                        canvas.width = cast width;
-                        canvas.height = cast height;
+                        var canvas = component.getCanvas(width, height);
                         var ctx:CanvasRenderingContext2D = canvas.getContext2d();
+                        ctx.clearRect(0, 0, width, height);
                         paintBitmap(ctx, cast imageInfo.data, imageRect, new Rectangle(0, 0, width, height));
-                        var data = canvas.toDataURL();
-                        background.push('url(${data})');
                     }
                 } else {
                     var rects:Slice9Rects = Slice9.buildRects(width, height, imageRect.width, imageRect.height, slice);
                     var srcRects:Array<Rectangle> = rects.src;
                     var dstRects:Array<Rectangle> = rects.dst;
 
-                    var canvas:CanvasElement = Browser.document.createCanvasElement();
-                    canvas.width = cast width;
-                    canvas.height = cast height;
+                    var canvas = component.getCanvas(width, height);
                     var ctx:CanvasRenderingContext2D = canvas.getContext2d();
+                    ctx.clearRect(0, 0, width, height);
                     ctx.imageSmoothingEnabled = false;
 
                     for (i in 0...srcRects.length) {
@@ -226,20 +271,21 @@ class StyleHelper {
                         var dstRect = dstRects[i];
                         paintBitmap(ctx, cast imageInfo.data, srcRect, dstRect);
                     }
-
-                    var data = canvas.toDataURL();
-                    background.push('url(${data})');
                 }
-                
-                background.reverse();
-                css.background = background.join(",");
             });
         } else {
+            component.removeCanvas();
             css.background = background[0];
         }
     }
 
     private static function paintBitmap(ctx:CanvasRenderingContext2D, img:Image, srcRect:Rectangle, dstRect:Rectangle) {
-        ctx.drawImage(img, srcRect.left, srcRect.top, srcRect.width, srcRect.height, dstRect.left, dstRect.top, dstRect.width, dstRect.height);
+        if (srcRect.width == 0 || srcRect.height == 0) {
+            return;
+        }
+        if (dstRect.width == 0 || dstRect.height == 0) {
+            return;
+        }
+        ctx.drawImage(img, Std.int(srcRect.left), Std.int(srcRect.top), Std.int(srcRect.width), Std.int(srcRect.height), Std.int(dstRect.left), Std.int(dstRect.top), Std.int(dstRect.width), Std.int(dstRect.height));
     }
 }

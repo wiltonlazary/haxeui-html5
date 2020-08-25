@@ -3,6 +3,7 @@ package haxe.ui.backend;
 import haxe.ui.backend.html5.EventMapper;
 import haxe.ui.backend.html5.HtmlUtils;
 import haxe.ui.backend.html5.UserAgent;
+import haxe.ui.backend.html5.util.StyleSheetHelper;
 import haxe.ui.core.Component;
 import haxe.ui.core.Screen;
 import haxe.ui.events.KeyboardEvent;
@@ -77,7 +78,11 @@ class ScreenImpl extends ScreenBase {
         return cy;
     }
 
-    public override function addComponent(component:Component) {
+    private override function get_isRetina():Bool {
+        return HtmlUtils.isRetinaDisplay();
+    }
+    
+    public override function addComponent(component:Component):Component {
         container.appendChild(component.element);
         component.ready();
 
@@ -102,6 +107,10 @@ class ScreenImpl extends ScreenBase {
         }
         addResizeListener();
         resizeComponent(component);
+        #if haxeui_html5_set_zindex
+        component.element.style.zIndex = "10000";
+        #end
+		return component;
     }
 
     private var _percentContainerWidthAdded:Bool = false;
@@ -111,7 +120,7 @@ class ScreenImpl extends ScreenBase {
         }
         _percentContainerWidthAdded = true;
         
-        var sheet:CSSStyleSheet = cast(Browser.document.styleSheets[0], CSSStyleSheet);
+        var sheet:CSSStyleSheet = StyleSheetHelper.getValidStyleSheet();
         sheet.insertRule("#haxeui-container-parent {
             margin: 0;
             width: 100%;
@@ -129,7 +138,7 @@ class ScreenImpl extends ScreenBase {
         }
         _percentContainerHeightAdded = true;
         
-        var sheet:CSSStyleSheet = cast(Browser.document.styleSheets[0], CSSStyleSheet);
+        var sheet:CSSStyleSheet = StyleSheetHelper.getValidStyleSheet();
         sheet.insertRule("#haxeui-container-parent {
             margin: 0;
             height: 100%;
@@ -140,11 +149,12 @@ class ScreenImpl extends ScreenBase {
         }", sheet.cssRules.length);
     }
     
-    public override function removeComponent(component:Component) {
+    public override function removeComponent(component:Component):Component {
         _topLevelComponents.remove(component);
         if (container.contains(component.element) == true) {
             container.removeChild(component.element);
         }
+		return component;
     }
 
     private override function handleSetComponentIndex(child:Component, index:Int) {
@@ -202,7 +212,7 @@ class ScreenImpl extends ScreenBase {
         
         switch (type) {
             case MouseEvent.MOUSE_MOVE | MouseEvent.MOUSE_OVER | MouseEvent.MOUSE_OUT |
-                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK:
+                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK:
 
                 // chrome sends a spurious mouse move event even if the mouse hasnt moved, lets consume that first
                 if (type == MouseEvent.MOUSE_MOVE && _mapping.exists(type) == false && UserAgent.instance.chrome == true) {
@@ -252,7 +262,7 @@ class ScreenImpl extends ScreenBase {
         
         switch (type) {
             case MouseEvent.MOUSE_MOVE | MouseEvent.MOUSE_OVER | MouseEvent.MOUSE_OUT |
-                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK:
+                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK:
                 _mapping.remove(type);
                 container.removeEventListener(EventMapper.HAXEUI_TO_DOM.get(type), __onMouseEvent);
                 if (EventMapper.MOUSE_TO_TOUCH.get(type) != null) {
@@ -305,6 +315,11 @@ class ScreenImpl extends ScreenBase {
     private function __onKeyEvent(event:js.html.KeyboardEvent) {
         var type:String = EventMapper.DOM_TO_HAXEUI.get(event.type);
         if (type != null) {
+            if (event.keyCode == 9 || event.which == 9) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                event.stopPropagation();
+            }
             var fn = _mapping.get(type);
             if (fn != null) {
                 var keyboardEvent = new KeyboardEvent(type);
