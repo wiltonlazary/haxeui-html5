@@ -34,6 +34,10 @@ class StyleHelper {
 
         css.width = HtmlUtils.px(width);
         css.height = HtmlUtils.px(height);
+        var borderStyle = style.borderStyle;
+        if (borderStyle == null) {
+            borderStyle = "solid";
+        }
 
         // border size
         if (style.borderLeftSize != null &&
@@ -43,7 +47,7 @@ class StyleHelper {
 
             if (style.borderLeftSize > 0) {
                 css.borderWidth = HtmlUtils.px(style.borderLeftSize);
-                css.borderStyle = "solid";
+                css.borderStyle = borderStyle;
             } else {
                 css.removeProperty("border-width");
                 css.removeProperty("border-style");
@@ -57,7 +61,7 @@ class StyleHelper {
         } else { // compound border
             if (style.borderTopSize != null && style.borderTopSize > 0) {
                css.borderTopWidth = HtmlUtils.px(style.borderTopSize);
-               css.borderTopStyle = "solid";
+               css.borderTopStyle = borderStyle;
             } else {
                 css.removeProperty("border-top-width");
                 css.removeProperty("border-top-style");
@@ -65,7 +69,7 @@ class StyleHelper {
 
             if (style.borderLeftSize != null && style.borderLeftSize > 0) {
                css.borderLeftWidth = HtmlUtils.px(style.borderLeftSize);
-               css.borderLeftStyle = "solid";
+               css.borderLeftStyle = borderStyle;
             } else {
                 css.removeProperty("border-left-width");
                 css.removeProperty("border-left-style");
@@ -73,7 +77,7 @@ class StyleHelper {
 
             if (style.borderBottomSize != null && style.borderBottomSize > 0) {
                css.borderBottomWidth = HtmlUtils.px(style.borderBottomSize);
-               css.borderBottomStyle = "solid";
+               css.borderBottomStyle = borderStyle;
             } else {
                 css.removeProperty("border-bottom-width");
                 css.removeProperty("border-bottom-style");
@@ -81,7 +85,7 @@ class StyleHelper {
 
             if (style.borderRightSize != null && style.borderRightSize > 0) {
                css.borderRightWidth = HtmlUtils.px(style.borderRightSize);
-               css.borderRightStyle = "solid";
+               css.borderRightStyle = borderStyle;
             } else {
                 css.removeProperty("border-right-width");
                 css.removeProperty("border-right-style");
@@ -239,11 +243,13 @@ class StyleHelper {
                         background.push('url(${imageInfo.data.src})');
                         if (style.backgroundImageRepeat == null) {
                             css.backgroundRepeat = "no-repeat";
+                            css.removeProperty("background-size");
                         } else if (style.backgroundImageRepeat == "repeat") {
                             css.backgroundRepeat = "repeat";
+                            css.removeProperty("background-size");
                         } else if (style.backgroundImageRepeat == "stretch") {
                             css.backgroundRepeat = "no-repeat";
-                            css.backgroundSize = '${HtmlUtils.px(width)} ${HtmlUtils.px(height)}';
+                            css.backgroundSize = '100% 100%';
                         }
                         background.reverse();
                         css.background = background.join(",");

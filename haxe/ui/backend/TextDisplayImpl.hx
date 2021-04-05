@@ -21,8 +21,13 @@ class TextDisplayImpl extends TextBase {
 
     private var _html:String;
     private override function validateData() {
-        var html:String = normalizeText(_text);
-        if (_html != html) {
+        var html:String = null;
+        if (_text != null) {
+            html = normalizeText(_text);
+        } else if (_htmlText != null) {
+            html = normalizeText(_htmlText, false);
+        }
+        if (html != null && _html != html) {
             element.innerHTML = html;
             _html = html;
             if (autoWidth == false) {
@@ -39,8 +44,8 @@ class TextDisplayImpl extends TextBase {
             element.style.whiteSpace = "normal";
             element.style.wordBreak = "break-word";
             measureTextRequired = true;
-        } else if (_displayData.wordWrap == false && element.style.whiteSpace != "nowrap") {
-            element.style.whiteSpace = "nowrap";
+        } else if (_displayData.wordWrap == false && element.style.whiteSpace != "pre") {
+            element.style.whiteSpace = "pre";
             measureTextRequired = true;
         }
 
@@ -151,7 +156,12 @@ class TextDisplayImpl extends TextBase {
     }
 
     private function setTempDivData(div:Element) {
-        var t:String = _text;
+        var t:String = null;
+        if (_text != null) {
+            t = normalizeText(_text);
+        } else if (_htmlText != null) {
+            t = normalizeText(_htmlText, false);
+        }
         if (t == null || t.length == 0) {
             t = "|";
         }
@@ -165,11 +175,14 @@ class TextDisplayImpl extends TextBase {
         } else {
             div.style.width = "";
         }
-        div.innerHTML = normalizeText(t);
+        div.innerHTML = t;
     }
 
-    private function normalizeText(text:String):String {
-        var html:String = HtmlUtils.escape(text);
+    private function normalizeText(text:String, escape:Bool = true):String {
+        var html = text;
+        if (escape == true) {
+            html = HtmlUtils.escape(text);
+        }
         html = StringTools.replace(html, "\\n", "\n");
         html = StringTools.replace(html, "\r\n", "<br/>");
         html = StringTools.replace(html, "\r", "<br/>");
@@ -179,9 +192,13 @@ class TextDisplayImpl extends TextBase {
     
     private var autoWidth(get, null):Bool;
     private function get_autoWidth():Bool {
-        if (Std.is(parentComponent, Label)) {
+        if ((parentComponent is Label)) {
             return cast(parentComponent, Label).autoWidth;
         }
         return false;
+    }
+    
+    private override function get_supportsHtml():Bool {
+        return true;
     }
 }
