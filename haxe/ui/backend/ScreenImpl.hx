@@ -1,5 +1,6 @@
 package haxe.ui.backend;
 
+import haxe.ui.Toolkit;
 import haxe.ui.backend.html5.EventMapper;
 import haxe.ui.backend.html5.HtmlUtils;
 import haxe.ui.backend.html5.UserAgent;
@@ -21,6 +22,11 @@ class ScreenImpl extends ScreenBase {
         _mapping = new Map<String, UIEvent->Void>();
         /* might need this later
         Browser.document.body.addEventListener("mousedown", function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            return false;
+        });
+        Browser.document.body.addEventListener("contextmenu", function(e) {
             e.stopPropagation();
             e.preventDefault();
             return false;
@@ -57,25 +63,25 @@ class ScreenImpl extends ScreenBase {
     private override function get_width():Float {
         var cx:Float = container.offsetWidth;
         if (cx <= 0) {
-            for (c in _topLevelComponents) {
+            for (c in rootComponents) {
                 if (c.width > cx) {
                     cx = c.width;
                 }
             }
         }
-        return cx;
+        return cx / Toolkit.scaleX;
     }
 
     private override function get_height():Float {
         var cy:Float = container.offsetHeight;
         if (cy <= 0) {
-            for (c in _topLevelComponents) {
+            for (c in rootComponents) {
                 if (c.height > cy) {
                     cy = c.height;
                 }
             }
         }
-        return cy;
+        return cy / Toolkit.scaleY;
     }
 
     private override function get_isRetina():Bool {
@@ -98,7 +104,6 @@ class ScreenImpl extends ScreenBase {
             component.element.style.transformOrigin = "top left";
         }
 
-        _topLevelComponents.push(component);
         if (component.percentWidth != null) {
             addPercentContainerWidth();
         }
@@ -150,7 +155,7 @@ class ScreenImpl extends ScreenBase {
     }
     
     public override function removeComponent(component:Component):Component {
-        _topLevelComponents.remove(component);
+        rootComponents.remove(component);
         if (container.contains(component.element) == true) {
             container.removeChild(component.element);
         }
@@ -212,9 +217,7 @@ class ScreenImpl extends ScreenBase {
 
         _hasListener = true;
         Browser.window.addEventListener("resize", function(e) {
-           for (c in _topLevelComponents) {
-               resizeComponent(c);
-           }
+            resizeRootComponents();
         });
 
     }
@@ -231,7 +234,8 @@ class ScreenImpl extends ScreenBase {
         
         switch (type) {
             case MouseEvent.MOUSE_MOVE | MouseEvent.MOUSE_OVER | MouseEvent.MOUSE_OUT |
-                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK:
+                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK |
+                MouseEvent.RIGHT_MOUSE_DOWN | MouseEvent.RIGHT_MOUSE_UP | MouseEvent.RIGHT_CLICK:
 
                 // chrome sends a spurious mouse move event even if the mouse hasnt moved, lets consume that first
                 if (type == MouseEvent.MOUSE_MOVE && _mapping.exists(type) == false && UserAgent.instance.chrome == true) {
@@ -281,7 +285,8 @@ class ScreenImpl extends ScreenBase {
         
         switch (type) {
             case MouseEvent.MOUSE_MOVE | MouseEvent.MOUSE_OVER | MouseEvent.MOUSE_OUT |
-                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK:
+                MouseEvent.MOUSE_DOWN | MouseEvent.MOUSE_UP | MouseEvent.CLICK | MouseEvent.DBL_CLICK |
+                MouseEvent.RIGHT_MOUSE_DOWN | MouseEvent.RIGHT_MOUSE_UP | MouseEvent.RIGHT_CLICK:
                 _mapping.remove(type);
                 container.removeEventListener(EventMapper.HAXEUI_TO_DOM.get(type), __onMouseEvent);
                 if (EventMapper.MOUSE_TO_TOUCH.get(type) != null) {
@@ -300,17 +305,29 @@ class ScreenImpl extends ScreenBase {
     private function __onMouseEvent(event:js.html.Event) {
         //event.preventDefault();
 
+        var button:Int = -1;
+        var touchEvent = false;
+        try {
+            touchEvent = (event is js.html.TouchEvent);
+        } catch (e:Dynamic) { }
+        if (touchEvent == false && (event is js.html.MouseEvent)) {
+            var me:js.html.MouseEvent = cast(event, js.html.MouseEvent);
+            button = me.which;
+        }
+        
+        var r = true;
         var type:String = EventMapper.DOM_TO_HAXEUI.get(event.type);
+        if (type == MouseEvent.RIGHT_CLICK) {
+            event.stopPropagation();
+            event.preventDefault();
+            r = false;
+        }
+        
         if (type != null) {
             var fn = _mapping.get(type);
             if (fn != null) {
                 var mouseEvent = new MouseEvent(type);
                 mouseEvent._originalEvent = event;
-
-                var touchEvent = false;
-                try {
-                    touchEvent = (event is js.html.TouchEvent);
-                } catch (e:Dynamic) { }
 
                 if (touchEvent == true) {
                     var te:js.html.TouchEvent = cast(event, js.html.TouchEvent);
@@ -329,6 +346,8 @@ class ScreenImpl extends ScreenBase {
                 fn(mouseEvent);
             }
         }
+        
+        return r;
     }
 
     private function __onKeyEvent(event:js.html.KeyboardEvent) {

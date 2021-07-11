@@ -1,11 +1,16 @@
+![build status](https://github.com/haxeui/haxeui-html5/actions/workflows/build.yml/badge.svg)
+
 # haxeui-html5
 `haxeui-html5` is the pure HTML5 backend for HaxeUI. It has no other framework dependency except `haxeui-core` itself and outputs a DOM tree.
 
 <p align="center">
-	<img src="https://github.com/haxeui/haxeui-html5/raw/master/screen-hybrid.png" />
+	<img src="https://github.com/haxeui/haxeui-html5/raw/master/.github/images/screen.png" />
 </p>
 <p align="center">
-	<img src="https://github.com/haxeui/haxeui-html5/raw/master/screen.png" />
+	<img src="https://github.com/haxeui/haxeui-html5/raw/master/.github/images/screen-dark.png" />
+</p>
+<p align="center">
+	<img src="https://github.com/haxeui/haxeui-html5/raw/master/.github/images/screen-hybrid.png" />
 </p>
 
 ## Installation
